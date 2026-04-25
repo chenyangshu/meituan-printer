@@ -52,8 +52,10 @@ def find_printer_by_alias(alias, config):
     return None
 
 
-def build_print_commands(title, message):
-    """构建 ESC/POS 打印命令序列"""
+def build_print_commands(title, message, center_content=False):
+    """构建 ESC/POS 打印命令序列
+    center_content: 正文是否居中（标题始终居中）
+    """
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     cmds = []
@@ -73,8 +75,8 @@ def build_print_commands(title, message):
     cmds.append(f"打印时间: {current_time}".encode("gb18030"))
     cmds.append(b"\n\n")
 
-    # 恢复左对齐 + 正常大小
-    cmds.append(b"\x1B\x61\x00")
+    # 恢复对齐 + 正常大小
+    cmds.append(b"\x1B\x61\x01" if center_content else b"\x1B\x61\x00")
     cmds.append(b"\x1B\x21\x00")
 
     # 分隔线
@@ -92,7 +94,8 @@ def build_print_commands(title, message):
             cmds.append(clean_line.encode("gb18030"))
             cmds.append(b"\n\x1B\x21\x10")
         else:
-            cmds.append(f"  {clean_line}\n".encode("gb18030"))
+            prefix = "" if center_content else "  "
+            cmds.append(f"{prefix}{clean_line}\n".encode("gb18030"))
 
     # 结尾
     cmds.append(b"\n" + ("=" * 32 + "\n").encode("gb18030"))
@@ -106,14 +109,14 @@ def build_print_commands(title, message):
     return cmds
 
 
-def send_print(ip, port, title, message):
+def send_print(ip, port, title, message, center_content=False):
     """连接打印机并发送任务"""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(5)
         s.connect((ip, port))
 
-        cmds = build_print_commands(title, message)
+        cmds = build_print_commands(title, message, center_content=center_content)
         for cmd in cmds:
             s.send(cmd)
         s.close()
@@ -188,6 +191,7 @@ def main():
     parser.add_argument("--port", type=int, default=9100, help="端口（默认 9100）")
     parser.add_argument("--title", help="打印标题")
     parser.add_argument("--content", help="打印内容（支持 \\n 换行）")
+    parser.add_argument("--center", action="store_true", help="正文内容居中打印")
     parser.add_argument("--setup", action="store_true", help="进入引导配置模式")
     parser.add_argument("--list", action="store_true", help="列出所有已配置打印机")
     parser.add_argument("--guide", action="store_true", help="显示新手指南")
@@ -199,7 +203,9 @@ def main():
 
     # 引导配置
     if args.setup:
-        os.system(f"python3 \"{SCRIPT_DIR}/init_printer.py\"")
+        from platform_utils import get_python_cmd
+        py = get_python_cmd()
+        os.system(f"{py} \"{SCRIPT_DIR}/init_printer.py\"")
         return
 
     # 列出打印机
@@ -241,7 +247,7 @@ def main():
         sys.exit(1)
 
     # 执行打印
-    success, msg = send_print(ip, port, args.title, args.content)
+    success, msg = send_print(ip, port, args.title, args.content, center_content=args.center)
     print(msg)
 
     if success and args.name and config:
