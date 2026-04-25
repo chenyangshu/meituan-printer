@@ -21,6 +21,15 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
+# 确保 Windows 控制台/管道在输出中文时尽量使用 UTF-8，失败时降级替换。
+for stream_name in ("stdout", "stderr"):
+    stream = getattr(sys, stream_name, None)
+    if stream and hasattr(stream, "reconfigure"):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
 # ============== 路径配置 ==============
 SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG_FILE = SCRIPT_DIR / "config.json"
@@ -120,25 +129,25 @@ def send_print(ip, port, title, message, center_content=False):
         for cmd in cmds:
             s.send(cmd)
         s.close()
-        return True, f"✅ 打印成功 → {ip}:{port}"
+        return True, f"打印成功 -> {ip}:{port}"
     except socket.timeout:
-        return False, f"❌ 连接超时 → {ip}:{port}（请检查打印机是否在线）"
+        return False, f"连接超时 -> {ip}:{port}（请检查打印机是否在线）"
     except ConnectionRefusedError:
-        return False, f"❌ 连接被拒绝 → {ip}:{port}（打印机未监听此端口）"
+        return False, f"连接被拒绝 -> {ip}:{port}（打印机未监听此端口）"
     except socket.gaierror:
-        return False, f"❌ IP 地址无效 → {ip}"
+        return False, f"IP 地址无效 -> {ip}"
     except Exception as e:
-        return False, f"❌ 打印失败 ({type(e).__name__}): {e}"
+        return False, f"打印失败 ({type(e).__name__}): {e}"
 
 
 def list_printers(config):
     """列出所有已配置打印机"""
     printers = config.get("printers", [])
     if not printers:
-        print("\n⚠️  尚未配置任何打印机，请先运行 --setup 进行配置\n")
+        print("\n尚未配置任何打印机，请先运行 --setup 进行配置\n")
         return
 
-    print("\n🖨️  已配置的打印机:")
+    print("\n已配置的打印机:")
     print("-" * 55)
     print(f"  {'别名':<8} {'IP':<16} {'端口':<6} {'类型':<10} {'备注'}")
     print("-" * 55)
@@ -152,18 +161,16 @@ def list_printers(config):
 def guide():
     """新手指南 / 功能介绍"""
     print("""
-╔══════════════════════════════════════════════════════╗
-║         🖨️  美团热敏打印机技能 - 功能介绍            ║
-╚══════════════════════════════════════════════════════╝
+美团热敏打印机技能 - 功能介绍
 
 【功能一览】
-  ① 打印任务单  - 向指定美团打印机发送格式化任务单
-  ② 定时打印   - 设置定时任务，自动在指定时间打印
-  ③ 多打印机   - 支持配置多台打印机，按名称/用途区分
+  1. 打印任务单 - 向指定美团打印机发送格式化任务单
+  2. 定时打印 - 设置定时任务，自动在指定时间打印
+  3. 多打印机 - 支持配置多台打印机，按名称/用途区分
 
 【使用流程】
-  第1步 → 运行 --setup 配置打印机（只需配置一次）
-  第2步 → 使用 --name <别名> 发起打印
+  第1步 -> 运行 --setup 配置打印机（只需配置一次）
+  第2步 -> 使用 --name <别名> 发起打印
 
 【快速命令】
   --setup    配置/管理打印机
@@ -221,19 +228,19 @@ def main():
 
     # 打印任务
     if not args.title or not args.content:
-        print("❌ 缺少必填参数 --title 和 --content")
+        print("缺少必填参数 --title 和 --content")
         print("   使用 --guide 查看帮助，或 --setup 配置打印机\n")
         sys.exit(1)
 
     # 确定目标打印机
     if args.name:
         if not config:
-            print("❌ 尚未配置打印机，请先运行: python3 print_to_printer.py --setup\n")
+            print("尚未配置打印机，请先运行: python3 print_to_printer.py --setup\n")
             sys.exit(1)
         printer = find_printer_by_alias(args.name, config)
         if not printer:
             aliases = [p["alias"] for p in config.get("printers", [])]
-            print(f"❌ 未找到别名: '{args.name}'")
+            print(f"未找到别名: '{args.name}'")
             print(f"   已配置: {', '.join(aliases)}")
             print("   使用 --list 查看全部\n")
             sys.exit(1)
@@ -243,7 +250,7 @@ def main():
         ip, port = args.ip, args.port
         target = f"{ip}:{port}"
     else:
-        print("❌ 必须指定 --name 或 --ip\n")
+        print("必须指定 --name 或 --ip\n")
         parser.print_help()
         sys.exit(1)
 
@@ -254,8 +261,8 @@ def main():
     if success and args.name and config:
         printer = find_printer_by_alias(args.name, config)
         if printer:
-            print(f"   📋 标题: {args.title}")
-            print(f"   🖥️  设备: {printer['alias']} ({printer.get('type', '')})")
+            print(f"   标题: {args.title}")
+            print(f"   设备: {printer['alias']} ({printer.get('type', '')})")
 
     sys.exit(0 if success else 1)
 

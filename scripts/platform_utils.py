@@ -50,7 +50,9 @@ def ensure_web_dependencies():
         return True, "依赖已就绪"
 
     cmd = [get_python_cmd(), "-m", "pip", "install", *missing]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     if result.returncode == 0:
         return True, f"已安装依赖: {', '.join(missing)}"
     return False, result.stderr.strip() or result.stdout.strip() or "依赖安装失败"
@@ -244,7 +246,7 @@ def _export_macos_launchd(task_config):
         with open(plist_file, "w", encoding="utf-8") as f:
             f.write(plist_content)
         # 加载任务
-        subprocess.run(["launchctl", "load", str(plist_file)], capture_output=True, timeout=10)
+        subprocess.run(["launchctl", "load", str(plist_file)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
         return True, f"已导出到 {plist_file}，并已加载到 launchd"
     except Exception as e:
         return False, f"导出失败: {e}"
@@ -257,7 +259,7 @@ def _remove_macos_launchd(task_id):
 
     try:
         if plist_file.exists():
-            subprocess.run(["launchctl", "unload", str(plist_file)], capture_output=True, timeout=10)
+            subprocess.run(["launchctl", "unload", str(plist_file)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
             plist_file.unlink()
             return True, f"已移除系统定时任务 {label}"
         else:
@@ -301,7 +303,9 @@ def _export_windows_schtasks(task_config):
     """导出 Windows 定时任务"""
     try:
         cmd, task_name = _build_schtasks_command(task_config)
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15, env=env)
         if result.returncode == 0:
             return True, f"已创建系统定时任务 \"{task_name}\""
         else:
@@ -318,7 +322,7 @@ def _remove_windows_schtasks(task_id, task_title=""):
     try:
         result = subprocess.run(
             ["schtasks", "/delete", "/tn", task_name, "/f"],
-            capture_output=True, text=True, timeout=15
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15
         )
         if result.returncode == 0:
             return True, f"已移除系统定时任务 \"{task_name}\""

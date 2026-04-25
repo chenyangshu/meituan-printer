@@ -5,6 +5,7 @@ Flask + APScheduler，支持打印机配置管理和定时打印任务
 """
 
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -111,7 +112,17 @@ def execute_print(printer_alias, title, content, center_content=False):
     if center_content:
         cmd.append("--center")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            env=env
+        )
         target = f"{printer['alias']} ({printer['ip']}:{printer.get('port', 9100)})"
         if result.returncode == 0:
             return True, result.stdout.strip() or f"打印成功 -> {target}"
@@ -702,7 +713,7 @@ def run_server():
         print(str(exc))
         sys.exit(1)
 
-    print(f"\n🖨️  美团打印机 Web 管理界面")
+    print(f"\n美团打印机 Web 管理界面")
     print(f"   系统平台: {get_os()}")
     print(f"   Python: {get_python_cmd()}")
     print(f"   访问地址: http://localhost:{port}")
