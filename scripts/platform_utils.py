@@ -24,13 +24,36 @@ def get_os():
 
 
 def get_python_cmd():
-    """检测系统可用的 python 命令"""
-    for cmd in ["python3", "python"]:
+    """检测系统可用的 python 命令，优先返回绝对路径。"""
+    executable = Path(sys.executable)
+    if executable.exists():
+        return str(executable)
+
+    candidates = ["python", "py"] if get_os() == "windows" else ["python3", "python"]
+    for cmd in candidates:
         path = shutil.which(cmd)
         if path:
-            return cmd
-    # 最后尝试 sys.executable
+            return path
     return sys.executable
+
+
+def ensure_web_dependencies():
+    """确保 Web 后台依赖可用，启动脚本和 Skill 平台初始化均可调用。"""
+    missing = []
+    for module, package in [("flask", "flask"), ("apscheduler", "apscheduler")]:
+        try:
+            __import__(module)
+        except ImportError:
+            missing.append(package)
+
+    if not missing:
+        return True, "依赖已就绪"
+
+    cmd = [get_python_cmd(), "-m", "pip", "install", *missing]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        return True, f"已安装依赖: {', '.join(missing)}"
+    return False, result.stderr.strip() or result.stdout.strip() or "依赖安装失败"
 
 
 def get_scripts_dir():
@@ -56,6 +79,47 @@ def get_templates_path():
 def get_print_script_path():
     """获取 print_to_printer.py 路径"""
     return get_scripts_dir() / "print_to_printer.py"
+
+
+def load_json_file(path, default=None):
+    """安全加载 JSON 文件。"""
+    if default is None:
+        default = {"version": "1.0"}
+    if not Path(path).exists():
+        return default
+    try:
+        import json
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def find_printer_by_alias(alias):
+    """按 Web 后台运行时配置查找打印机。"""
+    config = load_json_file(get_config_path(), {"version": "1.0", "printers": []})
+    for printer in config.get("printers", []):
+        if printer.get("alias") == alias:
+            return printer
+    return None
+
+
+def build_print_args(task_config):
+    """按最新配置构造打印脚本参数，兼容别名改名后的 IP/端口执行。"""
+    python_cmd = get_python_cmd()
+    print_script = str(get_print_script_path())
+    args = [python_cmd, print_script]
+
+    printer = find_printer_by_alias(task_config["printer_alias"])
+    if printer:
+        args.extend(["--ip", printer["ip"], "--port", str(printer.get("port", 9100))])
+    else:
+        args.extend(["--name", task_config["printer_alias"]])
+
+    args.extend(["--title", task_config["title"], "--content", task_config["content"]])
+    if task_config.get("content_centered"):
+        args.append("--center")
+    return args
 
 
 def generate_task_id():
@@ -119,17 +183,9 @@ def remove_system_task(task_id, task_title=""):
 
 def _build_launchd_plist(task_config):
     """生成 macOS launchd plist 内容"""
-    python_cmd = get_python_cmd()
-    print_script = str(get_print_script_path())
     schedule = task_config["schedule"]
 
-    program_args = [
-        python_cmd,
-        print_script,
-        "--name", task_config["printer_alias"],
-        "--title", task_config["title"],
-        "--content", task_config["content"]
-    ]
+    program_args = build_print_args(task_config)
 
     label = f"com.meituan-printer.{task_config['id']}"
 
@@ -214,13 +270,13 @@ def _remove_macos_launchd(task_id):
 
 def _build_schtasks_command(task_config):
     """构建 Windows schtasks 命令"""
-    python_cmd = get_python_cmd()
-    print_script = str(get_print_script_path())
     schedule = task_config["schedule"]
     task_name = f"MeituanPrinter-{task_config['id']}"
 
     # 构建执行命令
-    exec_cmd = f'"{python_cmd}" "{print_script}" --name "{task_config["printer_alias"]}" --title "{task_config["title"]}" --content "{task_config["content"]}"'
+    exec_cmd = subprocess.list2cmdline(build_print_args(task_config))
+    if " " in exec_cmd:
+        exec_cmd = f'"{exec_cmd}"'
 
     base_cmd = [
         "schtasks", "/create",

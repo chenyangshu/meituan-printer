@@ -49,23 +49,19 @@
 
 #### 启动方式（任选一种）
 
-1. **双击启动脚本**（最简单）：
-   - macOS：双击 `scripts/start.command`
-   - Windows：双击 `scripts/start.bat`
-
-2. **让 AI 帮你启动**（对话启动）：
+1. **让 AI 帮你启动**（对话启动）：
    - 直接说："启动打印机管理界面" / "打开 web 后台" / "启动打印机 web 端"
    - AI 会自动启动服务并打开浏览器
 
-3. **终端命令**：
-   - macOS：`cd scripts && python3 web_admin.py`
-   - Windows：`cd scripts && python web_admin.py`
+2. **终端命令**：
+   - macOS/Linux：`python3 scripts/start_web_admin.py`
+   - Windows：`python scripts\start_web_admin.py`
 
 #### 访问地址
 
-启动后打开浏览器访问：**`http://localhost:5000`**
+启动后打开浏览器访问终端输出的地址，默认：**`http://localhost:5000`**
 
-> 💡 如果 5000 端口被占用（macOS AirPlay 默认占用），会自动切换到 `http://localhost:5001`。
+> 💡 如果 5000 端口被占用，会自动选择 `5001` 起的可用端口。
 
 #### 能做什么
 
@@ -148,5 +144,5 @@ crontab -e
 | 连接被拒绝 | 端口错误/打印机未启动 | 确认端口为 9100 |
 | 打印乱码 | 编码问题 | 确认打印机支持 GB18030 中文 |
 | 找不到别名 | 未配置或拼写错误 | 让 AI 列出已配置的打印机，或打开 Web 界面查看 |
-| Web 打不开 | 服务未启动 | 双击启动脚本，或让 AI 帮你启动 |
-| 5000 端口不可用 | macOS AirPlay 占用 | 自动使用 5001 端口，直接访问 localhost:5001 |
+| Web 打不开 | 服务未启动 | 运行 `python3 scripts/start_web_admin.py`，或让 AI 帮你启动 |
+| 5000 端口不可用 | 端口被占用 | 查看终端输出，访问自动选择的可用端口 |

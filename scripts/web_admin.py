@@ -20,7 +20,7 @@ from platform_utils import (
     get_scripts_dir, get_config_path, get_tasks_path,
     get_templates_path, get_print_script_path,
     generate_task_id, get_python_cmd, get_os,
-    export_system_task, remove_system_task
+    export_system_task, remove_system_task, ensure_web_dependencies
 )
 
 app = Flask(__name__)
@@ -647,11 +647,14 @@ def delete_template(tpl_id):
 
 @app.route("/api/info", methods=["GET"])
 def system_info():
+    deps_ok, deps_msg = ensure_web_dependencies()
     return jsonify({
         "success": True,
         "os": get_os(),
         "python": get_python_cmd(),
-        "scheduler_running": scheduler.running
+        "scheduler_running": scheduler.running,
+        "dependencies_ok": deps_ok,
+        "dependencies_message": deps_msg
     })
 
 
@@ -670,21 +673,34 @@ def _get_next_run_time(task):
     return None
 
 
-# ============== 启动 ==============
+def run_server():
+    """启动 Web 管理后台。"""
+    deps_ok, deps_msg = ensure_web_dependencies()
+    if not deps_ok:
+        print(f"Web 依赖安装失败: {deps_msg}")
+        sys.exit(1)
 
-if __name__ == "__main__":
     # 启动时加载所有已启用的定时任务
     load_all_scheduler_jobs()
-    port = 5000
-    # macOS AirPlay Receiver 默认占用 5000，自动切换到 5001
+
     import socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    def find_free_port(start=5000, attempts=20):
+        for candidate in range(start, start + attempts):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.bind(("127.0.0.1", candidate))
+                sock.close()
+                return candidate
+            except OSError:
+                sock.close()
+        raise RuntimeError(f"未找到可用端口: {start}-{start + attempts - 1}")
+
     try:
-        sock.bind(("0.0.0.0", port))
-        sock.close()
-    except OSError:
-        port = 5001
-        sock.close()
+        port = find_free_port()
+    except RuntimeError as exc:
+        print(str(exc))
+        sys.exit(1)
 
     print(f"\n🖨️  美团打印机 Web 管理界面")
     print(f"   系统平台: {get_os()}")
@@ -692,4 +708,10 @@ if __name__ == "__main__":
     print(f"   访问地址: http://localhost:{port}")
     print(f"   按 Ctrl+C 停止服务\n")
 
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="127.0.0.1", port=port, debug=False)
+
+
+# ============== 启动 ==============
+
+if __name__ == "__main__":
+    run_server()

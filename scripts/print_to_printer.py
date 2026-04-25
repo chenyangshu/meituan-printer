@@ -203,9 +203,10 @@ def main():
 
     # 引导配置
     if args.setup:
-        from platform_utils import get_python_cmd
-        py = get_python_cmd()
-        os.system(f"{py} \"{SCRIPT_DIR}/init_printer.py\"")
+        print("请启动 Web 管理后台完成初始化配置：")
+        print(f"  cd \"{SCRIPT_DIR}\"")
+        print("  python3 start_web_admin.py")
+        print("然后在浏览器中添加打印机。")
         return
 
     # 列出打印机
