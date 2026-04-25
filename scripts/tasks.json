@@ -1,4 +1,22 @@
 {
   "version": "1.0",
-  "tasks": []
+  "tasks": [
+    {
+      "id": "task-001",
+      "title": "酒水开货提醒",
+      "printer_alias": "前厅酒水打印机",
+      "content": "盘点酒水并在酒水群进行开货",
+      "content_centered": true,
+      "schedule": {
+        "type": "daily",
+        "time": "03:00",
+        "day_of_week": null,
+        "day_of_month": null
+      },
+      "enabled": true,
+      "exported_to_system": false,
+      "created_at": "2026-04-26 03:00",
+      "updated_at": "2026-04-26 03:00"
+    }
+  ]
 }
