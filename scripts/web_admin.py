@@ -70,6 +70,15 @@ def save_config(config):
     save_json(get_config_path(), config)
 
 
+def find_printer_by_alias(alias):
+    """从最新 Web 配置中按别名查找打印机。"""
+    config = get_config()
+    for printer in config.get("printers", []):
+        if printer.get("alias") == alias:
+            return printer
+    return None
+
+
 def get_tasks():
     return load_json(get_tasks_path(), {"version": "1.0", "tasks": []})
 
@@ -85,12 +94,17 @@ def get_templates():
 # ============== 打印执行 ==============
 
 def execute_print(printer_alias, title, content, center_content=False):
-    """执行打印任务（通过命令行调用 print_to_printer.py）"""
+    """执行打印任务，始终以 Web 后台保存的最新打印机配置为准。"""
+    printer = find_printer_by_alias(printer_alias)
+    if not printer:
+        return False, f"打印机 '{printer_alias}' 不存在，请先在 Web 后台更新任务的目标打印机"
+
     py = get_python_cmd()
     script = str(get_print_script_path())
     cmd = [
         py, script,
-        "--name", printer_alias,
+        "--ip", printer["ip"],
+        "--port", str(printer.get("port", 9100)),
         "--title", title,
         "--content", content
     ]
@@ -98,8 +112,9 @@ def execute_print(printer_alias, title, content, center_content=False):
         cmd.append("--center")
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        target = f"{printer['alias']} ({printer['ip']}:{printer.get('port', 9100)})"
         if result.returncode == 0:
-            return True, result.stdout.strip() or "打印成功"
+            return True, result.stdout.strip() or f"打印成功 -> {target}"
         else:
             return False, result.stderr.strip() or result.stdout.strip() or "打印失败"
     except subprocess.TimeoutExpired:
@@ -156,6 +171,15 @@ def add_scheduler_job(task):
         replace_existing=True,
         args=[task["printer_alias"], task["title"], task["content"], task.get("content_centered", False)]
     )
+
+
+def rebuild_scheduler_jobs(tasks):
+    """根据任务列表重建内存中的调度任务。"""
+    for job in scheduler.get_jobs():
+        scheduler.remove_job(job.id)
+    for task in tasks:
+        if task.get("enabled"):
+            add_scheduler_job(task)
 
 
 def remove_scheduler_job(task_id):
@@ -253,6 +277,19 @@ def update_printer(alias):
                 "remark": data.get("remark", p.get("remark", "")).strip()
             }
             save_config(config)
+
+            if new_alias != alias:
+                tasks_data = get_tasks()
+                changed = False
+                for task in tasks_data.get("tasks", []):
+                    if task.get("printer_alias") == alias:
+                        task["printer_alias"] = new_alias
+                        task["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        changed = True
+                if changed:
+                    save_tasks(tasks_data)
+                    rebuild_scheduler_jobs(tasks_data.get("tasks", []))
+
             return jsonify({"success": True, "message": "打印机更新成功", "printer": config["printers"][i]})
 
     return jsonify({"success": False, "message": f"未找到打印机 '{alias}'"}), 404
